@@ -11,6 +11,11 @@ window.APP_CONFIG = {
   // only on that one device). Fill these after running supabase.sql.
   supabaseUrl: "",
   supabaseAnonKey: "",
+
+  // Demo PINs — used ONLY while Supabase is not connected (offline mode).
+  // Once Supabase is connected, the real PINs set in supabase.sql are used
+  // and these are ignored.
+  offlinePins: { mentor: "1111", admin: "9999" },
 };
 
 // Subjects shown in the Subject dropdown

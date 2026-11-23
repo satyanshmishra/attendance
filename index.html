@@ -106,8 +106,10 @@
       <h2>Mentor</h2>
       <p class="sub">Enter your name to begin.</p>
       <label for="mentor">Mentor name</label>
+      <input id="mentor" placeholder="e.g. Satyansh Mishra" autocomplete="name">
+      <label for="mpin">Mentor PIN</label>
       <div class="row" style="align-items:center">
-        <input id="mentor" placeholder="e.g. Satyansh Mishra" autocomplete="name">
+        <input id="mpin" type="password" inputmode="numeric" placeholder="••••" autocomplete="off">
         <button class="btn arrow" id="toDetails" aria-label="Next">→</button>
       </div>
       <button class="link" id="toHistory">📂 Check previous attendance</button>
@@ -161,9 +163,23 @@
     </div>
   </section>
 
+  <!-- 4b. Admin PIN -->
+  <section class="screen" id="s-admin">
+    <button class="back" data-go="s-mentor">← Back</button>
+    <div class="card">
+      <h2>🔒 Admin access</h2>
+      <p class="sub">Previous attendance can be seen only with the admin PIN.</p>
+      <label for="apin">Admin PIN</label>
+      <div class="row" style="align-items:center">
+        <input id="apin" type="password" inputmode="numeric" placeholder="••••" autocomplete="off">
+        <button class="btn arrow" id="adminGo" aria-label="Open">→</button>
+      </div>
+    </div>
+  </section>
+
   <!-- 5. History -->
   <section class="screen" id="s-history">
-    <button class="back" data-go="s-mentor">← Back</button>
+    <div style="display:flex;justify-content:space-between"><button class="back" data-go="s-mentor">← Back</button><button class="back" id="lockAdmin">🔒 Lock</button></div>
     <div class="tabs">
       <button class="on" data-tab="byClass">Class records</button>
       <button data-tab="byStudent">Student check</button>
@@ -229,14 +245,21 @@
     all(){ try { return JSON.parse(localStorage.getItem(LKEY) || '[]'); } catch { return []; } },
     put(arr){ try { localStorage.setItem(LKEY, JSON.stringify(arr)); } catch {} },
   };
+  const AUTH = { mentorPin:'', adminPin:'' };
+  async function checkPin(pin){
+    if (!pin) return null;
+    if (sb) {
+      const { data, error } = await sb.rpc('att_check', { p_pin: pin });
+      if (error) throw error; return data;
+    }
+    const P = C.offlinePins || {};
+    return pin === P.admin ? 'admin' : pin === P.mentor ? 'mentor' : null;
+  }
   const store = {
     async save(rec){
       if (sb) {
-        if (rec.id) {
-          const { data, error } = await sb.from('attendance_sessions').update({...rec, updated_at:new Date().toISOString()}).eq('id', rec.id).select().single();
-          if (error) throw error; return data;
-        }
-        const { data, error } = await sb.from('attendance_sessions').insert(rec).select().single();
+        const id = rec.id || null; const body = {...rec}; delete body.id;
+        const { data, error } = await sb.rpc('att_save', { p_pin: AUTH.mentorPin, p_id: id, p_rec: body });
         if (error) throw error; return data;
       }
       const all = local.all();
@@ -246,12 +269,8 @@
     },
     async query({ class_name, batch, from, to }){
       if (sb) {
-        let q = sb.from('attendance_sessions').select('*').order('taken_on', {ascending:false}).order('created_at', {ascending:false}).limit(500);
-        if (class_name) q = q.eq('class_name', class_name);
-        if (batch) q = q.eq('batch', batch);
-        if (from) q = q.gte('taken_on', from);
-        if (to) q = q.lte('taken_on', to);
-        const { data, error } = await q; if (error) throw error; return data;
+        const { data, error } = await sb.rpc('att_list', { p_pin: AUTH.adminPin, p_class: class_name || null, p_batch: batch || null, p_from: from || null, p_to: to || null });
+        if (error) throw error; return data || [];
       }
       return local.all().filter(r =>
         (!class_name || r.class_name === class_name) && (!batch || r.batch === batch) &&
@@ -299,15 +318,42 @@
 
   // ---------- 1. mentor ----------
   try { $('mentor').value = localStorage.getItem('att_mentor') || ''; } catch {}
-  $('toDetails').onclick = () => {
-    const m = $('mentor').value.trim();
+  try { $('mpin').value = localStorage.getItem('att_mpin') || ''; } catch {}
+  $('toDetails').onclick = async () => {
+    const m = $('mentor').value.trim(), pin = $('mpin').value.trim();
     if (!m) { toast('Please enter mentor name'); $('mentor').focus(); return; }
-    S.mentor = m; try { localStorage.setItem('att_mentor', m); } catch {}
-    $('hello').textContent = 'Mentor: ' + m;
-    go('s-details');
+    if (!pin) { toast('Please enter PIN'); $('mpin').focus(); return; }
+    const btn = $('toDetails'); btn.disabled = true;
+    try {
+      const role = await checkPin(pin);
+      if (!role) { toast('❌ Wrong PIN'); $('mpin').value = ''; try { localStorage.removeItem('att_mpin'); } catch {} return; }
+      AUTH.mentorPin = pin;
+      if (role === 'admin') AUTH.adminPin = pin;
+      S.mentor = m;
+      try { localStorage.setItem('att_mentor', m); localStorage.setItem('att_mpin', pin); } catch {}
+      $('hello').textContent = 'Mentor: ' + m;
+      go('s-details');
+    } catch (e) { toast('⚠ ' + (e.message || 'Network error')); }
+    finally { btn.disabled = false; }
   };
-  $('mentor').onkeydown = e => { if (e.key === 'Enter') $('toDetails').click(); };
-  $('toHistory').onclick = () => go('s-history');
+  $('mentor').onkeydown = e => { if (e.key === 'Enter') $('mpin').focus(); };
+  $('mpin').onkeydown = e => { if (e.key === 'Enter') $('toDetails').click(); };
+
+  try { AUTH.adminPin = sessionStorage.getItem('att_apin') || ''; } catch {}
+  $('toHistory').onclick = () => { if (AUTH.adminPin) go('s-history'); else { $('apin').value = ''; go('s-admin'); setTimeout(() => $('apin').focus(), 100); } };
+  $('adminGo').onclick = async () => {
+    const pin = $('apin').value.trim(); if (!pin) return;
+    const btn = $('adminGo'); btn.disabled = true;
+    try {
+      const role = await checkPin(pin);
+      if (role !== 'admin') { toast('❌ Wrong admin PIN'); $('apin').value = ''; return; }
+      AUTH.adminPin = pin; try { sessionStorage.setItem('att_apin', pin); } catch {}
+      go('s-history');
+    } catch (e) { toast('⚠ ' + (e.message || 'Network error')); }
+    finally { btn.disabled = false; }
+  };
+  $('apin').onkeydown = e => { if (e.key === 'Enter') $('adminGo').click(); };
+  $('lockAdmin').onclick = () => { AUTH.adminPin = ''; try { sessionStorage.removeItem('att_apin'); } catch {} go('s-mentor'); toast('🔒 Locked'); };
 
   // ---------- 2. details ----------
   $('date').value = today();
@@ -369,7 +415,7 @@
       msg.className = 'saved ok';
       msg.textContent = sb ? '✓ Saved to records' : '✓ Saved on this device (offline mode)';
     } catch (e) {
-      msg.className = 'saved err'; msg.textContent = '⚠ Could not save: ' + (e.message || e) + ' — tap Edit then Attendance Taken to retry.';
+      msg.className = 'saved err'; msg.textContent = '⚠ Could not save: ' + (e.message || e) + ' — tap Edit then Attendance Taken to retry.'; if (/PIN/i.test(e.message||'')) { try { localStorage.removeItem('att_mpin'); } catch {} }
     }
   }
 

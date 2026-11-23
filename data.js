@@ -9,8 +9,8 @@ window.APP_CONFIG = {
 
   // Supabase (leave empty to run in offline/demo mode — data then stays
   // only on that one device). Fill these after running supabase.sql.
-  supabaseUrl: "",
-  supabaseAnonKey: "",
+  supabaseUrl: "https://axznixboebvixkigojvj.supabase.co",
+  supabaseAnonKey: "sb_publishable_g3vreHGOHm7lu4b91Qtahw_4uH-loXh",
 
   // Demo PINs — used ONLY while Supabase is not connected (offline mode).
   // Once Supabase is connected, the real PINs set in supabase.sql are used

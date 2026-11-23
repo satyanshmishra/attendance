@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Attendance</title>
+<meta name="theme-color" content="#0d1117">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="data.js"></script>
+<style>
+  :root{
+    --bg:#0d1117; --card:#161b22; --card2:#1f2630; --line:#2d3643;
+    --text:#f0f6fc; --muted:#9aa7b4; --accent:#38bdf8; --accent2:#a78bfa;
+    --green:#22c55e; --red:#f87171; --yellow:#facc15;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:Poppins,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh}
+  .wrap{max-width:720px;margin:0 auto;padding:20px 16px 120px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  header h1{font-size:1.15rem;font-weight:600}
+  header h1 span{color:var(--accent)}
+  .mode{font-size:.7rem;padding:3px 8px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+  .mode.online{color:var(--green);border-color:#22c55e55}
+  .screen{display:none;animation:fade .25s ease}
+  .screen.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+  h2{font-size:1.35rem;font-weight:600;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:.88rem;margin-bottom:18px}
+  label{display:block;font-size:.8rem;color:var(--muted);margin:14px 0 6px}
+  input,select{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--text);font:inherit;font-size:1rem;outline:none}
+  input:focus,select:focus{border-color:var(--accent)}
+  select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 20px) 55%,calc(100% - 14px) 55%;background-size:6px 6px;background-repeat:no-repeat}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1;min-width:0}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 18px;border-radius:12px;border:none;font:inherit;font-weight:600;font-size:.98rem;cursor:pointer;background:var(--accent);color:#06222f;transition:transform .1s,opacity .2s}
+  .btn:active{transform:scale(.97)}
+  .btn:disabled{opacity:.4;pointer-events:none}
+  .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+  .btn.green{background:var(--green);color:#052e14}
+  .btn.full{width:100%}
+  .arrow{width:56px;height:52px;flex:0 0 56px;font-size:1.4rem}
+  .link{background:none;border:none;color:var(--accent2);font:inherit;font-size:.92rem;cursor:pointer;margin-top:18px;text-decoration:underline;text-underline-offset:3px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .chip{font-size:.76rem;padding:4px 10px;border-radius:20px;background:var(--card2);border:1px solid var(--line);color:var(--muted)}
+  .chip b{color:var(--text);font-weight:500}
+  .search{position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0 10px}
+  .counter{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;color:var(--muted);margin:4px 0 12px}
+  .counter b{color:var(--green);font-size:1.05rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .tile{position:relative;padding:14px 12px 14px 44px;border-radius:14px;background:var(--card);border:1.5px solid var(--line);cursor:pointer;user-select:none;font-size:.92rem;font-weight:500;line-height:1.3;min-height:58px;display:flex;align-items:center;transition:all .15s}
+  .tile .no{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:var(--card2);display:grid;place-items:center;font-size:.72rem;color:var(--muted)}
+  .tile.on{background:#22c55e1f;border-color:var(--green)}
+  .tile.on .no{background:var(--green);color:#052e14;font-weight:700}
+  .tile.on .no::after{content:"✓";position:absolute}
+  .tile.on .no span{visibility:hidden}
+  .tile.hide{display:none}
+  .bar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);z-index:10}
+  .bar .inner{max-width:720px;margin:0 auto;display:flex;gap:10px}
+  .bar .btn{flex:1}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
+  .stat{background:var(--card2);border-radius:12px;padding:12px;text-align:center}
+  .stat b{display:block;font-size:1.5rem}
+  .stat small{color:var(--muted);font-size:.75rem}
+  .stat.p b{color:var(--green)} .stat.a b{color:var(--red)}
+  ol.names{list-style:none;counter-reset:n}
+  ol.names li{counter-increment:n;padding:10px 12px;border-bottom:1px solid var(--line);font-size:.95rem;display:flex;gap:10px}
+  ol.names li::before{content:counter(n)".";color:var(--muted);min-width:24px}
+  .absent-head{color:var(--red);font-weight:600;margin:6px 0 4px}
+  .saved{font-size:.82rem;color:var(--muted);margin-top:10px;text-align:center}
+  .saved.ok{color:var(--green)} .saved.err{color:var(--red)}
+  .tabs{display:flex;background:var(--card2);border-radius:12px;padding:4px;margin-bottom:14px}
+  .tabs button{flex:1;padding:10px;border:none;border-radius:9px;background:none;color:var(--muted);font:inherit;font-size:.88rem;cursor:pointer}
+  .tabs button.on{background:var(--card);color:var(--text);box-shadow:0 1px 4px #0006}
+  .hist-item{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer}
+  .hist-item .t{font-weight:600}
+  .hist-item .m{color:var(--muted);font-size:.8rem;margin-top:3px}
+  .hist-item .pa{font-size:.82rem;margin-top:6px}
+  .pa .g{color:var(--green)} .pa .r{color:var(--red)}
+  .result{margin-top:14px}
+  .res-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);font-size:.9rem}
+  .badge{font-weight:700;font-size:.8rem;padding:2px 10px;border-radius:20px}
+  .badge.P{background:#22c55e26;color:var(--green)} .badge.A{background:#f8717126;color:var(--red)}
+  .empty{text-align:center;color:var(--muted);padding:30px 10px;font-size:.9rem}
+  .back{background:none;border:none;color:var(--muted);font:inherit;cursor:pointer;margin-bottom:12px;font-size:.9rem}
+  .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--line);padding:10px 18px;border-radius:30px;font-size:.88rem;opacity:0;transition:all .25s;z-index:50;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%)}
+  .mini{display:flex;gap:8px;margin-bottom:10px}
+  .mini .btn{padding:8px 12px;font-size:.8rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📋 <span id="instName"></span> Attendance</h1>
+    <span class="mode" id="mode">offline</span>
+  </header>
+
+  <!-- 1. Mentor -->
+  <section class="screen active" id="s-mentor">
+    <div class="card">
+      <h2>Mentor</h2>
+      <p class="sub">Enter your name to begin.</p>
+      <label for="mentor">Mentor name</label>
+      <div class="row" style="align-items:center">
+        <input id="mentor" placeholder="e.g. Satyansh Mishra" autocomplete="name">
+        <button class="btn arrow" id="toDetails" aria-label="Next">→</button>
+      </div>
+      <button class="link" id="toHistory">📂 Check previous attendance</button>
+    </div>
+  </section>
+
+  <!-- 2. Details -->
+  <section class="screen" id="s-details">
+    <button class="back" data-go="s-mentor">← Back</button>
+    <div class="card">
+      <h2>Class details</h2>
+      <p class="sub" id="hello"></p>
+      <label for="date">Date</label>
+      <input type="date" id="date">
+      <label for="cls">Class</label>
+      <select id="cls"></select>
+      <label for="batch">Batch</label>
+      <select id="batch"></select>
+      <label for="subject">Subject</label>
+      <select id="subject"></select>
+      <button class="btn full" style="margin-top:22px" id="toMark">Next →</button>
+    </div>
+  </section>
+
+  <!-- 3. Mark -->
+  <section class="screen" id="s-mark">
+    <button class="back" data-go="s-details">← Back</button>
+    <div class="chips" id="markChips"></div>
+    <div class="search"><input id="q" placeholder="🔍 Search student…" autocomplete="off"></div>
+    <div class="counter"><span>Tap a name to mark <b style="color:var(--green)">present</b></span><span>Present <b id="cnt">0</b> / <span id="tot">0</span></span></div>
+    <div class="mini">
+      <button class="btn ghost" id="allP">Mark all present</button>
+      <button class="btn ghost" id="clearP">Clear all</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <!-- 4. Summary -->
+  <section class="screen" id="s-summary">
+    <div class="card">
+      <h2>Attendance taken ✅</h2>
+      <div class="chips" id="sumChips" style="margin-top:10px"></div>
+      <div class="stats">
+        <div class="stat"><b id="sT">0</b><small>Total</small></div>
+        <div class="stat p"><b id="sP">0</b><small>Present</small></div>
+        <div class="stat a"><b id="sA">0</b><small>Absent</small></div>
+      </div>
+      <div class="absent-head">Absentees</div>
+      <ol class="names" id="absList"></ol>
+      <p class="saved" id="savedMsg"></p>
+    </div>
+  </section>
+
+  <!-- 5. History -->
+  <section class="screen" id="s-history">
+    <button class="back" data-go="s-mentor">← Back</button>
+    <div class="tabs">
+      <button class="on" data-tab="byClass">Class records</button>
+      <button data-tab="byStudent">Student check</button>
+    </div>
+
+    <div id="byClass">
+      <div class="row">
+        <select id="hCls"></select>
+        <select id="hBatch"></select>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <input type="date" id="hFrom">
+        <input type="date" id="hTo">
+      </div>
+      <button class="btn full" style="margin-top:12px" id="hLoad">Show records</button>
+      <div class="result" id="hList"></div>
+    </div>
+
+    <div id="byStudent" style="display:none">
+      <select id="stCls"></select>
+      <select id="stBatch" style="margin-top:10px"></select>
+      <input id="stName" list="stNames" placeholder="Student name" style="margin-top:10px" autocomplete="off">
+      <datalist id="stNames"></datalist>
+      <div class="row" style="margin-top:10px">
+        <input type="date" id="stFrom">
+        <input type="date" id="stTo">
+      </div>
+      <button class="btn full" style="margin-top:12px" id="stLoad">Check</button>
+      <div class="result" id="stRes"></div>
+    </div>
+  </section>
+
+  <!-- 6. Session detail (from history) -->
+  <section class="screen" id="s-detail">
+    <button class="back" data-go="s-history">← Back to records</button>
+    <div class="card" id="detailCard"></div>
+  </section>
+</div>
+
+<div class="bar" id="bar" style="display:none"><div class="inner" id="barInner"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const C = window.APP_CONFIG || {};
+  const BATCHES = window.BATCHES || {};
+  const SUBJECTS = window.SUBJECTS || [];
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+  const fmtDate = s => { const [y,m,d] = s.split('-'); return new Date(+y, m-1, +d).toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}); };
+
+  $('instName').textContent = C.instituteName || '';
+
+  // ---------- storage (Supabase or local) ----------
+  let sb = null;
+  if (C.supabaseUrl && C.supabaseAnonKey && window.supabase) {
+    sb = window.supabase.createClient(C.supabaseUrl, C.supabaseAnonKey);
+    $('mode').textContent = 'online'; $('mode').classList.add('online');
+  }
+  const LKEY = 'att_sessions_v1';
+  const local = {
+    all(){ try { return JSON.parse(localStorage.getItem(LKEY) || '[]'); } catch { return []; } },
+    put(arr){ try { localStorage.setItem(LKEY, JSON.stringify(arr)); } catch {} },
+  };
+  const store = {
+    async save(rec){
+      if (sb) {
+        if (rec.id) {
+          const { data, error } = await sb.from('attendance_sessions').update({...rec, updated_at:new Date().toISOString()}).eq('id', rec.id).select().single();
+          if (error) throw error; return data;
+        }
+        const { data, error } = await sb.from('attendance_sessions').insert(rec).select().single();
+        if (error) throw error; return data;
+      }
+      const all = local.all();
+      if (rec.id) { const i = all.findIndex(r => r.id === rec.id); if (i > -1) all[i] = rec; }
+      else { rec.id = 'L' + Date.now(); rec.created_at = new Date().toISOString(); all.push(rec); }
+      local.put(all); return rec;
+    },
+    async query({ class_name, batch, from, to }){
+      if (sb) {
+        let q = sb.from('attendance_sessions').select('*').order('taken_on', {ascending:false}).order('created_at', {ascending:false}).limit(500);
+        if (class_name) q = q.eq('class_name', class_name);
+        if (batch) q = q.eq('batch', batch);
+        if (from) q = q.gte('taken_on', from);
+        if (to) q = q.lte('taken_on', to);
+        const { data, error } = await q; if (error) throw error; return data;
+      }
+      return local.all().filter(r =>
+        (!class_name || r.class_name === class_name) && (!batch || r.batch === batch) &&
+        (!from || r.taken_on >= from) && (!to || r.taken_on <= to)
+      ).sort((a,b) => b.taken_on.localeCompare(a.taken_on) || (b.created_at||'').localeCompare(a.created_at||''));
+    }
+  };
+
+  // ---------- state ----------
+  const S = { mentor:'', date:'', cls:'', batch:'', subject:'', students:[], present:new Set(), savedId:null, last:null };
+
+  // ---------- navigation ----------
+  function go(id){
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+    window.scrollTo(0,0);
+    renderBar(id);
+  }
+  document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+
+  function renderBar(id){
+    const bar = $('bar'), inner = $('barInner');
+    inner.innerHTML = '';
+    if (id === 's-mark') {
+      inner.innerHTML = '<button class="btn green" id="takeBtn">✔ Attendance Taken</button>';
+      $('takeBtn').onclick = takeAttendance;
+    } else if (id === 's-summary') {
+      inner.innerHTML = '<button class="btn ghost" id="editBtn">✎ Edit</button><button class="btn" id="dlBtn">⬇ Download PDF</button>';
+      $('editBtn').onclick = () => go('s-mark');
+      $('dlBtn').onclick = () => downloadPDF(S.last);
+    } else { bar.style.display = 'none'; return; }
+    bar.style.display = 'block';
+  }
+
+  const toast = msg => { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); };
+
+  // ---------- dropdown helpers ----------
+  function fill(sel, items, placeholder){
+    sel.innerHTML = (placeholder ? `<option value="">${esc(placeholder)}</option>` : '') + items.map(i => `<option>${esc(i)}</option>`).join('');
+  }
+  function linkClassBatch(clsSel, batchSel, placeholder, onChange){
+    fill(clsSel, Object.keys(BATCHES), placeholder ? 'All classes' : null);
+    const upd = () => { fill(batchSel, clsSel.value ? Object.keys(BATCHES[clsSel.value] || {}) : [], placeholder ? 'All batches' : null); onChange && onChange(); };
+    clsSel.onchange = upd; batchSel.onchange = () => onChange && onChange(); upd();
+  }
+
+  // ---------- 1. mentor ----------
+  try { $('mentor').value = localStorage.getItem('att_mentor') || ''; } catch {}
+  $('toDetails').onclick = () => {
+    const m = $('mentor').value.trim();
+    if (!m) { toast('Please enter mentor name'); $('mentor').focus(); return; }
+    S.mentor = m; try { localStorage.setItem('att_mentor', m); } catch {}
+    $('hello').textContent = 'Mentor: ' + m;
+    go('s-details');
+  };
+  $('mentor').onkeydown = e => { if (e.key === 'Enter') $('toDetails').click(); };
+  $('toHistory').onclick = () => go('s-history');
+
+  // ---------- 2. details ----------
+  $('date').value = today();
+  linkClassBatch($('cls'), $('batch'));
+  fill($('subject'), SUBJECTS);
+  $('toMark').onclick = () => {
+    S.date = $('date').value; S.cls = $('cls').value; S.batch = $('batch').value; S.subject = $('subject').value;
+    if (!S.date || !S.cls || !S.batch || !S.subject) { toast('Please fill all fields'); return; }
+    S.students = [...(BATCHES[S.cls][S.batch] || [])].sort((a,b) => a.localeCompare(b));
+    S.present = new Set(); S.savedId = null;
+    buildGrid(); go('s-mark');
+  };
+
+  // ---------- 3. mark ----------
+  const chips = () => [
+    ['Date', fmtDate(S.date)], ['Class', S.cls], ['Batch', S.batch], ['Subject', S.subject], ['Mentor', S.mentor]
+  ].map(([k,v]) => `<span class="chip">${k}: <b>${esc(v)}</b></span>`).join('');
+
+  function buildGrid(){
+    $('markChips').innerHTML = chips();
+    $('q').value = '';
+    $('grid').innerHTML = S.students.map((n,i) =>
+      `<div class="tile" data-name="${esc(n)}"><span class="no"><span>${i+1}</span></span>${esc(n)}</div>`).join('');
+    $('grid').querySelectorAll('.tile').forEach(t => t.onclick = () => {
+      const n = t.dataset.name;
+      S.present.has(n) ? S.present.delete(n) : S.present.add(n);
+      t.classList.toggle('on', S.present.has(n));
+      if (navigator.vibrate) navigator.vibrate(15);
+      count();
+    });
+    count();
+  }
+  function count(){ $('cnt').textContent = S.present.size; $('tot').textContent = S.students.length; }
+  function syncTiles(){ $('grid').querySelectorAll('.tile').forEach(t => t.classList.toggle('on', S.present.has(t.dataset.name))); count(); }
+  $('q').oninput = () => {
+    const q = $('q').value.trim().toLowerCase();
+    $('grid').querySelectorAll('.tile').forEach(t => t.classList.toggle('hide', q && !t.dataset.name.toLowerCase().includes(q)));
+  };
+  $('allP').onclick = () => { S.students.forEach(n => S.present.add(n)); syncTiles(); };
+  $('clearP').onclick = () => { if (confirmClear()) { S.present.clear(); syncTiles(); } };
+  function confirmClear(){ return S.present.size === 0 || window.confirm('Clear all marked students?'); }
+
+  // ---------- 4. take & save ----------
+  async function takeAttendance(){
+    const present = S.students.filter(n => S.present.has(n));
+    const absent = S.students.filter(n => !S.present.has(n));
+    const rec = { taken_on:S.date, class_name:S.cls, batch:S.batch, subject:S.subject, mentor:S.mentor, present, absent, total:S.students.length };
+    if (S.savedId) rec.id = S.savedId;
+    S.last = rec;
+
+    $('sumChips').innerHTML = chips();
+    $('sT').textContent = rec.total; $('sP').textContent = present.length; $('sA').textContent = absent.length;
+    $('absList').innerHTML = absent.length ? absent.map(n => `<li>${esc(n)}</li>`).join('') : '<li style="color:var(--green)">No absentees 🎉</li>';
+    const msg = $('savedMsg'); msg.className = 'saved'; msg.textContent = 'Saving…';
+    go('s-summary');
+    try {
+      const saved = await store.save({...rec});
+      S.savedId = saved.id; S.last = saved;
+      msg.className = 'saved ok';
+      msg.textContent = sb ? '✓ Saved to records' : '✓ Saved on this device (offline mode)';
+    } catch (e) {
+      msg.className = 'saved err'; msg.textContent = '⚠ Could not save: ' + (e.message || e) + ' — tap Edit then Attendance Taken to retry.';
+    }
+  }
+
+  // ---------- PDF ----------
+  function downloadPDF(r){
+    if (!r) return;
+    if (!window.jspdf) { toast('PDF library not loaded — check internet'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'mm', format:'a4' });
+    const W = doc.internal.pageSize.getWidth();
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(16);
+    doc.text(C.instituteName || 'Attendance', W/2, 16, { align:'center' });
+    doc.setFontSize(12); doc.setFont('helvetica','normal');
+    doc.text('Attendance Report', W/2, 23, { align:'center' });
+
+    doc.autoTable({
+      startY: 29, theme:'grid',
+      styles:{ fontSize:10, cellPadding:2.2 },
+      columnStyles:{ 0:{ fontStyle:'bold', fillColor:[240,244,248], cellWidth:32 }, 2:{ fontStyle:'bold', fillColor:[240,244,248], cellWidth:32 } },
+      body:[
+        ['Date', fmtDate(r.taken_on), 'Class', r.class_name],
+        ['Batch', r.batch, 'Subject', r.subject],
+        ['Mentor', r.mentor, 'Total', String(r.total)],
+        ['Present', String(r.present.length), 'Absent', String(r.absent.length)],
+      ]
+    });
+
+    let y = doc.lastAutoTable.finalY + 8;
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(200,30,30);
+    doc.text(`Absentees (${r.absent.length})`, 14, y); doc.setTextColor(0);
+    doc.autoTable({
+      startY: y + 3, theme:'striped', headStyles:{ fillColor:[220,38,38] },
+      styles:{ fontSize:10 }, columnStyles:{ 0:{ cellWidth:16 } },
+      head:[['S.No','Name']],
+      body: r.absent.length ? r.absent.map((n,i) => [i+1, n]) : [['-','No absentees']]
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    doc.text('Full list', 14, y);
+    const all = [...r.present.map(n => [n,'P']), ...r.absent.map(n => [n,'A'])].sort((a,b) => a[0].localeCompare(b[0]));
+    doc.autoTable({
+      startY: y + 3, theme:'grid', headStyles:{ fillColor:[30,41,59] },
+      styles:{ fontSize:10 }, columnStyles:{ 0:{ cellWidth:16 }, 2:{ cellWidth:28, halign:'center', fontStyle:'bold' } },
+      head:[['S.No','Name','Status']],
+      body: all.map(([n,s],i) => [i+1, n, s === 'P' ? 'Present' : 'Absent']),
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 2) d.cell.styles.textColor = d.cell.raw === 'Present' ? [22,163,74] : [220,38,38]; }
+    });
+
+    const pages = doc.getNumberOfPages();
+    for (let i = 1; i <= pages; i++) {
+      doc.setPage(i); doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90);
+      doc.text(`Page ${i} of ${pages}`, W/2, doc.internal.pageSize.getHeight() - 8, { align:'center' });
+    }
+    const safe = s => String(s).replace(/[^\w-]+/g,'_');
+    doc.save(`Attendance_${safe(r.batch)}_${safe(r.subject)}_${r.taken_on}.pdf`);
+  }
+
+  // ---------- 5. history ----------
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+    $('byClass').style.display = b.dataset.tab === 'byClass' ? '' : 'none';
+    $('byStudent').style.display = b.dataset.tab === 'byStudent' ? '' : 'none';
+  });
+  linkClassBatch($('hCls'), $('hBatch'), true);
+  const weekAgo = () => { const d = new Date(); d.setDate(d.getDate() - 7); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+  $('hFrom').value = weekAgo(); $('hTo').value = today();
+  $('stFrom').value = weekAgo(); $('stTo').value = today();
+
+  let hRows = [];
+  $('hLoad').onclick = async () => {
+    const box = $('hList'); box.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      hRows = await store.query({ class_name:$('hCls').value, batch:$('hBatch').value, from:$('hFrom').value, to:$('hTo').value });
+      box.innerHTML = hRows.length ? hRows.map((r,i) => `
+        <div class="hist-item" data-i="${i}">
+          <div class="t">${esc(r.batch)} · ${esc(r.subject)}</div>
+          <div class="m">${fmtDate(r.taken_on)} · ${esc(r.class_name)} · ${esc(r.mentor)}</div>
+          <div class="pa"><span class="g">Present ${r.present.length}</span> · <span class="r">Absent ${r.absent.length}</span> / ${r.total}</div>
+        </div>`).join('') : '<div class="empty">No records found for these filters.</div>';
+      box.querySelectorAll('.hist-item').forEach(el => el.onclick = () => showDetail(hRows[+el.dataset.i]));
+    } catch (e) { box.innerHTML = `<div class="empty">⚠ ${esc(e.message || e)}</div>`; }
+  };
+
+  function showDetail(r){
+    const all = [...r.present.map(n => [n,'P']), ...r.absent.map(n => [n,'A'])].sort((a,b) => a[0].localeCompare(b[0]));
+    $('detailCard').innerHTML = `
+      <h2>${esc(r.batch)} · ${esc(r.subject)}</h2>
+      <div class="chips" style="margin-top:10px">
+        <span class="chip">Date: <b>${fmtDate(r.taken_on)}</b></span><span class="chip">Class: <b>${esc(r.class_name)}</b></span><span class="chip">Mentor: <b>${esc(r.mentor)}</b></span>
+      </div>
+      <div class="stats"><div class="stat"><b>${r.total}</b><small>Total</small></div><div class="stat p"><b>${r.present.length}</b><small>Present</small></div><div class="stat a"><b>${r.absent.length}</b><small>Absent</small></div></div>
+      ${all.map(([n,s]) => `<div class="res-row"><span>${esc(n)}</span><span class="badge ${s}">${s}</span></div>`).join('')}
+      <button class="btn full" style="margin-top:16px" id="detDl">⬇ Download PDF</button>`;
+    $('detDl').onclick = () => downloadPDF(r);
+    go('s-detail');
+  }
+
+  // student check
+  const fillNames = () => {
+    const c = $('stCls').value, b = $('stBatch').value;
+    const names = c && b ? (BATCHES[c][b] || []) : c ? Object.values(BATCHES[c]).flat() : Object.values(BATCHES).flatMap(x => Object.values(x).flat());
+    $('stNames').innerHTML = [...new Set(names)].sort().map(n => `<option value="${esc(n)}">`).join('');
+  };
+  linkClassBatch($('stCls'), $('stBatch'), true, fillNames);
+
+  $('stLoad').onclick = async () => {
+    const name = $('stName').value.trim();
+    const box = $('stRes');
+    if (!name) { toast('Enter student name'); return; }
+    box.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const rows = await store.query({ class_name:$('stCls').value, batch:$('stBatch').value, from:$('stFrom').value, to:$('stTo').value });
+      const key = name.toLowerCase();
+      const hits = rows.map(r => {
+        if (r.present.some(n => n.toLowerCase() === key)) return [r,'P'];
+        if (r.absent.some(n => n.toLowerCase() === key)) return [r,'A'];
+        return null;
+      }).filter(Boolean);
+      if (!hits.length) { box.innerHTML = '<div class="empty">No attendance found for this student in this date range.</div>'; return; }
+      const p = hits.filter(h => h[1] === 'P').length;
+      box.innerHTML = `
+        <div class="stats"><div class="stat"><b>${hits.length}</b><small>Classes</small></div><div class="stat p"><b>${p}</b><small>Present</small></div><div class="stat a"><b>${hits.length - p}</b><small>Absent</small></div></div>
+        ${hits.map(([r,s]) => `<div class="res-row"><span>${fmtDate(r.taken_on)}<br><small style="color:var(--muted)">${esc(r.batch)} · ${esc(r.subject)} · ${esc(r.mentor)}</small></span><span class="badge ${s}">${s === 'P' ? 'Present' : 'Absent'}</span></div>`).join('')}`;
+    } catch (e) { box.innerHTML = `<div class="empty">⚠ ${esc(e.message || e)}</div>`; }
+  };
+})();
+</script>
+</body>
+</html>
